@@ -50,7 +50,8 @@ void cleanup_log(const std::string& filename, std::chrono::system_clock::time_po
     std::lock_guard<std::mutex> lock(log_mutex); // Защита от одновременной записи
     std::ifstream infile(filename);
     if (!infile.is_open()) {
-        std::cerr << "Не удалось открыть файл " << filename << " для чтения.\n";
+        // Изменение: Не выводить ошибку, если файл не существует
+        std::cerr << "Файл " << filename << " не существует. Пропуск очистки.\n";
         return;
     }
 
@@ -247,47 +248,73 @@ void close_serial_port(int fd) {
 
 // Функция обработки измерений и записи средних значений
 void process_measurements(std::deque<Measurement>& measurements_deque) {
+    int counter = 0; // Счётчик для определения, когда выполнять расчёт дневного среднего
+
     while (true) {
-        std::this_thread::sleep_for(std::chrono::hours(1)); // Раз в час
+        // Для дебага: выполнять раз в минуту
+        std::this_thread::sleep_for(std::chrono::minutes(1)); // Раз в минуту
 
         auto now = std::chrono::system_clock::now();
-        auto cutoff_hour = now - std::chrono::hours(1);
-        auto cutoff_24h = now - std::chrono::hours(24);
-        auto cutoff_30d = now - std::chrono::hours(24 * 30);
-        auto cutoff_year = now - std::chrono::hours(24 * 365);
+        // Для дебага:
+        auto cutoff_minute = now - std::chrono::minutes(1);  // вместо часа
+        auto cutoff_2minutes = now - std::chrono::minutes(2); // вместо дня
+        auto cutoff_30days_debug = now - std::chrono::minutes(30); // вместо 30 дней
+        auto cutoff_year_debug = now - std::chrono::minutes(60); // вместо года
 
-        // Сбор данных за последний час
+        // Сбор данных за последний "час" (теперь минута)
         std::vector<double> hourly_temps;
         {
             std::lock_guard<std::mutex> lock(log_mutex);
             for (const auto& m : measurements_deque) {
-                if (m.timestamp >= cutoff_hour) {
+                if (m.timestamp >= cutoff_minute) {
                     hourly_temps.push_back(m.temperature);
                 }
             }
         }
 
-        // Вычисление среднего за час
+        // Вычисление среднего за "час"
         double hourly_avg = calculate_average(hourly_temps);
         std::ostringstream oss_hourly;
         oss_hourly << std::chrono::system_clock::to_time_t(now) << " " << hourly_avg;
         write_log(LOG_HOURLY, oss_hourly.str());
-        std::cout << "Среднее за час записано: " << hourly_avg << "°C\n";
+        std::cout << "Среднее за минуту записано: " << hourly_avg << "°C\n";
 
-        // Сбор данных за последние 24 часа для LOG_ALL
+        counter++;
+
+        // Проверяем, пора ли обновлять дневное среднее
+        if (counter % 2 == 0) { // Каждые 2 минуты
+            // Сбор данных за последние "2 минуты" (теперь вместо дня)
+            std::vector<double> daily_temps;
+            {
+                std::lock_guard<std::mutex> lock(log_mutex);
+                for (const auto& m : measurements_deque) {
+                    if (m.timestamp >= cutoff_2minutes) {
+                        daily_temps.push_back(m.temperature);
+                    }
+                }
+            }
+
+            // Вычисление среднего за "день" (теперь 2 минуты)
+            double daily_avg = calculate_average(daily_temps);
+            std::ostringstream oss_daily;
+            oss_daily << std::chrono::system_clock::to_time_t(now) << " " << daily_avg;
+            write_log(LOG_DAILY, oss_daily.str());
+            std::cout << "Среднее за 2 минуты записано: " << daily_avg << "°C\n";
+        }
+
+        // Очистка LOG_ALL (хранение последних "2 минут")
         {
             std::lock_guard<std::mutex> lock(log_mutex);
-            while (!measurements_deque.empty() && measurements_deque.front().timestamp < cutoff_24h) {
+            while (!measurements_deque.empty() && measurements_deque.front().timestamp < cutoff_2minutes) {
                 measurements_deque.pop_front();
             }
         }
 
-        // Очистка LOG_HOURLY (хранение последних 30 дней)
-        cleanup_log(LOG_HOURLY, cutoff_30d);
+        // Очистка LOG_HOURLY (хранение последних "30 минут" для дебага)
+        cleanup_log(LOG_HOURLY, cutoff_30days_debug);
 
-        // TODO: Реализовать очистку LOG_DAILY при необходимости
-        // Например, удалять записи старше 365 дней
-        cleanup_log(LOG_DAILY, cutoff_year);
+        // Очистка LOG_DAILY (хранение последних "60 минут" для дебага)
+        cleanup_log(LOG_DAILY, cutoff_year_debug);
     }
 }
 
