@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мониторинг температуры</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+        header {
+            background-color: #4CAF50;
+            color: white;
+            text-align: center;
+            padding: 1rem;
+            font-size: 1.5rem;
+        }
+        .container {
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        section {
+            margin-bottom: 2rem;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        section h2 {
+            color: #4CAF50;
+            font-size: 1.5rem;
+        }
+        .table-wrapper {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        table th, table td {
+            padding: 0.8rem;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        table th {
+            background-color: #f4f4f4;
+        }
+        #chart {
+            width: 100%;
+            height: 300px;
+        }
+        footer {
+            text-align: center;
+            padding: 1rem;
+            margin-top: 2rem;
+            background: #333;
+            color: white;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header>
+        Панель мониторинга температуры
+    </header>
+
+    <div class="container">
+        <!-- Секция графиков -->
+        <section>
+            <h2>График измерений за последние 24 часа</h2>
+            <canvas id="chart"></canvas>
+        </section>
+
+        <!-- Таблица всех измерений -->
+        <section>
+            <h2>Все измерения (за последние 24 часа)</h2>
+            <div class="table-wrapper">
+                <table id="all-measurements-table">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Температура (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Таблица средних значений за час -->
+        <section>
+            <h2>Средние температуры за час (за последний месяц)</h2>
+            <div class="table-wrapper">
+                <table id="hourly-averages-table">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Средняя температура (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Таблица средних значений за день -->
+        <section>
+            <h2>Средние температуры за день (за текущий год)</h2>
+            <div class="table-wrapper">
+                <table id="daily-averages-table">
+                    <thead>
+                        <tr>
+                            <th>Дата</th>
+                            <th>Средняя температура (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <footer>
+        © 2025 Система мониторинга температуры
+    </footer>
+
+    <script>
+        const API_BASE = 'http://localhost:8080';
+
+        // Форматирование времени для отображения
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleString();
+        }
+
+        // Обновление данных таблицы и графика
+        async function fetchData() {
+            // Получение всех измерений
+            const allMeasurementsResponse = await fetch(`${API_BASE}/temperature/all`);
+            const allMeasurements = await allMeasurementsResponse.json();
+
+            // Заполнение таблицы всех измерений
+            const allMeasurementsTable = document.getElementById('all-measurements-table').querySelector('tbody');
+            allMeasurementsTable.innerHTML = '';
+            allMeasurements.forEach(entry => {
+                const row = `<tr>
+                    <td>${formatTimestamp(entry.timestamp)}</td>
+                    <td>${entry.temperature.toFixed(2)}°C</td>
+                </tr>`;
+                allMeasurementsTable.innerHTML += row;
+            });
+
+            // Обновление графика
+            const labels = allMeasurements.map(entry => formatTimestamp(entry.timestamp));
+            const data = allMeasurements.map(entry => entry.temperature);
+
+            const chartData = {
+                labels,
+                datasets: [{
+                    label: 'Температура (°C)',
+                    data,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 2,
+                    tension: 0.2,
+                    fill: false,
+                }],
+            };
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            if (window.chartInstance) {
+                window.chartInstance.data = chartData;
+                window.chartInstance.update();
+            } else {
+                window.chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: true },
+                        },
+                    },
+                });
+            }
+
+            // Получение средних значений за час
+            const hourlyAveragesResponse = await fetch(`${API_BASE}/temperature/hourly`);
+            const hourlyAverages = await hourlyAveragesResponse.json();
+            const hourlyAveragesTable = document.getElementById('hourly-averages-table').querySelector('tbody');
+            hourlyAveragesTable.innerHTML = '';
+            hourlyAverages.forEach(entry => {
+                const row = `<tr>
+                    <td>${formatTimestamp(entry.timestamp)}</td>
+                    <td>${entry.avg_temperature.toFixed(2)}°C</td>
+                </tr>`;
+                hourlyAveragesTable.innerHTML += row;
+            });
+
+            // Получение средних значений за день
+            const dailyAveragesResponse = await fetch(`${API_BASE}/temperature/daily`);
+            const dailyAverages = await dailyAveragesResponse.json();
+            const dailyAveragesTable = document.getElementById('daily-averages-table').querySelector('tbody');
+            dailyAveragesTable.innerHTML = '';
+            dailyAverages.forEach(entry => {
+                const row = `<tr>
+                    <td>${formatTimestamp(entry.timestamp)}</td>
+                    <td>${entry.avg_temperature.toFixed(2)}°C</td>
+                </tr>`;
+                dailyAveragesTable.innerHTML += row;
+            });
+        }
+
+        // Автоматическое обновление данных каждую минуту
+        fetchData();
+        setInterval(fetchData, 60000);
+    </script>
+</body>
+</html>
