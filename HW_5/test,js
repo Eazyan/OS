@@ -1,0 +1,19 @@
+const sqlite3 = require('sqlite3').verbose();
+
+// Открытие базы данных SQLite
+const db = new sqlite3.Database('temperature_logs.db');
+
+// Запрос для получения всех данных из таблицы
+db.all('SELECT * FROM temperature_logs', [], (err, rows) => {
+    if (err) {
+        throw err;
+    }
+    
+    console.log("Все данные из таблицы:");
+    rows.forEach((row) => {
+        console.log(row);
+    });
+});
+
+// Закрытие соединения с базой данных
+db.close();

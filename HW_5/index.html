@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Temperature Dashboard</title>
+    <title>Панель мониторинга температуры</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -20,23 +20,57 @@
             font-size: 1.5rem;
         }
         .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
             margin: 2rem auto;
-            max-width: 900px;
+            max-width: 1200px;
+        }
+        .card {
             background: white;
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
+            width: 250px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 200px;
+        }
+        .card h3 {
+            color: #4CAF50;
+            margin-top: 0;
+            font-size: 1.25rem;
+        }
+        .card .card-body {
+            flex-grow: 1;
+        }
+        .card .card-footer {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #777;
+        }
+        .card-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        .card-container .card {
+            flex: 1;
+            min-width: 200px;
         }
         .section {
-            padding: 1.5rem;
-            border-bottom: 1px solid #ddd;
-        }
-        .section:last-child {
-            border-bottom: none;
+            padding: 1rem;
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         .section h2 {
-            margin-top: 0;
             color: #4CAF50;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
         }
         .table {
             width: 100%;
@@ -51,9 +85,11 @@
         .table th {
             background-color: #f4f4f4;
         }
-        #chart {
-            margin: 1rem auto;
-            height: 300px;
+        #logs-table-wrapper {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 8px;
         }
         footer {
             text-align: center;
@@ -62,104 +98,147 @@
             background: #333;
             color: white;
         }
+
+        /* Новый стиль для раздела статистики и графика */
+        .full-width-section {
+            width: 100%;
+            margin-bottom: 1rem;
+        }
+        #chart {
+            width: 100%;
+            height: 300px;
+        }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
     <header>
-        Temperature Monitoring Dashboard
+        Панель мониторинга температуры
     </header>
 
     <div class="container">
-        <!-- Current Temperature -->
-        <div class="section">
-            <h2>Current Temperature</h2>
-            <p id="current-temp">Loading...</p>
+        <!-- Статистика и график (полная ширина) -->
+        <div class="full-width-section">
+            <div class="section">
+                <h2>Статистика (Последние 24 минуты)</h2>
+                <canvas id="chart"></canvas>
+            </div>
         </div>
 
-        <!-- Statistics -->
-        <div class="section">
-            <h2>Statistics (Last 24 Hours)</h2>
-            <canvas id="chart"></canvas>
+        <!-- Карточка текущей температуры -->
+        <div class="card">
+            <h3>Текущая температура</h3>
+            <div class="card-body">
+                <p id="current-temp">Загрузка...</p>
+            </div>
         </div>
 
-        <!-- Table View -->
+        <!-- Карточки с дополнительными данными -->
+        <div class="card-container">
+            <div class="card">
+                <h3>Средняя температура за час</h3>
+                <div class="card-body" id="average-hour">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Средняя температура за месяц</h3>
+                <div class="card-body" id="average-month">
+                    <p>Загрузка...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Таблица с логами -->
         <div class="section">
-            <h2>Temperature Logs</h2>
-            <table class="table" id="logs-table">
-                <thead>
-                    <tr>
-                        <th>Timestamp</th>
-                        <th>Temperature (°C)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <!-- Data rows will be appended here -->
-                </tbody>
-            </table>
+            <h2>Логи температуры</h2>
+            <div id="logs-table-wrapper">
+                <table class="table" id="logs-table">
+                    <thead>
+                        <tr>
+                            <th>Время</th>
+                            <th>Температура (°C)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Данные таблицы будут добавляться сюда -->
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 
     <footer>
-        © 2025 Temperature Monitoring System
+        © 2025 Система мониторинга температуры
     </footer>
 
     <script>
-        const API_BASE = 'http://localhost:8080';
+        const API_BASE = 'http://localhost:8080'; // Адрес вашего API
 
-        // Format timestamp to human-readable date
+        // Форматирование времени для отображения
         function formatTimestamp(timestamp) {
             const date = new Date(timestamp * 1000);
             return date.toLocaleString();
         }
 
-        // Fetch current temperature
+        // Функция для получения текущей температуры
         async function fetchCurrentTemperature() {
             try {
                 const response = await fetch(`${API_BASE}/temperature/current`);
                 const data = await response.json();
                 document.getElementById('current-temp').textContent = 
-                    `Temperature: ${data.temperature}°C (as of ${formatTimestamp(data.timestamp)})`;
+                    `Температура: ${data.temperature}°C (на ${formatTimestamp(data.timestamp)})`;
             } catch (error) {
-                document.getElementById('current-temp').textContent = 'Error fetching current temperature.';
+                document.getElementById('current-temp').textContent = 'Ошибка при получении текущей температуры.';
             }
         }
 
-        // Fetch statistics and update chart and table
+        // Функция для получения статистики и обновления графика, таблицы, карточек
         async function fetchStatistics() {
             try {
                 const response = await fetch(`${API_BASE}/temperature/statistics`);
                 const data = await response.json();
 
-                // Update chart
+                // Обновление графика
                 const labels = data.map(entry => formatTimestamp(entry.timestamp));
                 const temperatures = data.map(entry => entry.temperature);
 
-                const ctx = document.getElementById('chart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Temperature (°C)',
-                            data: temperatures,
-                            borderColor: 'rgba(75, 192, 192, 1)',
-                            borderWidth: 2,
-                            tension: 0.2,
-                            fill: false,
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                display: true,
-                            },
-                        },
-                    },
-                });
+                const maxDataPoints = 60;
+                const chartData = {
+                    labels: labels.slice(-maxDataPoints),
+                    datasets: [{
+                        label: 'Температура (°C)',
+                        data: temperatures.slice(-maxDataPoints),
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        fill: false,
+                    }],
+                };
 
-                // Update table
+                const ctx = document.getElementById('chart').getContext('2d');
+                if (window.chartInstance) {
+                    window.chartInstance.data = chartData;
+                    window.chartInstance.update();
+                } else {
+                    window.chartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: chartData,
+                        options: {
+                            responsive: true,
+                            plugins: {
+                                legend: {
+                                    display: true,
+                                },
+                            },
+                            animation: {
+                                duration: 1,
+                            }
+                        },
+                    });
+                }
+
+                // Обновление таблицы с логами
                 const tableBody = document.getElementById('logs-table').querySelector('tbody');
                 tableBody.innerHTML = '';
                 data.forEach(entry => {
@@ -170,14 +249,32 @@
                     `;
                     tableBody.appendChild(row);
                 });
+
+                // Обновление карточек с средними значениями
+                const averageHour = data.reduce((acc, entry) => acc + entry.temperature, 0) / data.length;
+                document.getElementById('average-hour').innerHTML = `
+                    <p>Температура: ${averageHour.toFixed(2)}°C</p>
+                `;
+
+                const averageMonth = 20; // Пример значения
+                document.getElementById('average-month').innerHTML = `
+                    <p>Температура: ${averageMonth}°C</p>
+                `;
+
             } catch (error) {
-                console.error('Error fetching statistics:', error);
+                console.error('Ошибка при получении статистики:', error);
             }
         }
 
-        // Initialize
+        // Инициализация
         fetchCurrentTemperature();
         fetchStatistics();
+
+        // Автоматическое обновление данных каждую секунду
+        setInterval(() => {
+            fetchCurrentTemperature();
+            fetchStatistics();
+        }, 1000);
     </script>
 </body>
 </html>

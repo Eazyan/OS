@@ -55,6 +55,8 @@ void init_database() {
 
 // Запись температуры в базу данных
 void log_temperature(double temperature) {
+    std::lock_guard<std::mutex> lock(db_mutex); // Защищаем доступ к базе данных
+
     sqlite3* db;
     if (sqlite3_open(DB_NAME.c_str(), &db) != SQLITE_OK) {
         std::cerr << "Ошибка открытия базы данных: " << sqlite3_errmsg(db) << std::endl;
@@ -81,6 +83,7 @@ void log_temperature(double temperature) {
 
 // Получение данных из базы за указанный период
 std::vector<std::pair<std::time_t, double>> get_temperature_logs(std::time_t start, std::time_t end) {
+    std::lock_guard<std::mutex> lock(db_mutex); // Защищаем доступ к базе данных
     sqlite3* db;
     std::vector<std::pair<std::time_t, double>> logs;
 
@@ -116,11 +119,10 @@ void start_http_server() {
     httplib::Server svr;
 
     svr.set_default_headers({
-    {"Access-Control-Allow-Origin", "*"},
-    {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
-    {"Access-Control-Allow-Headers", "Content-Type"}
+        {"Access-Control-Allow-Origin", "*"},
+        {"Access-Control-Allow-Methods", "GET, POST, OPTIONS"},
+        {"Access-Control-Allow-Headers", "Content-Type"}
     });
-
 
     svr.Get("/temperature/current", [](const httplib::Request&, httplib::Response& res) {
         auto logs = get_temperature_logs(0, std::time(nullptr));
@@ -134,7 +136,7 @@ void start_http_server() {
     });
 
     svr.Get("/temperature/statistics", [](const httplib::Request& req, httplib::Response& res) {
-        auto start = std::time(nullptr) - 24 * 3600; // Последние 24 часа
+        auto start = std::time(nullptr) - 24 * 60; // 24 минуты назад
         auto end = std::time(nullptr);
         auto logs = get_temperature_logs(start, end);
 
@@ -152,13 +154,36 @@ void start_http_server() {
     svr.listen("0.0.0.0", 8080);
 }
 
-// Основной поток чтения данных
+// Запуск потока для чтения данных
 void data_reader_thread() {
     while (running) {
-        // Симуляция получения данных температуры (здесь можно подключить реальный источник данных)
+        // Симуляция получения данных температуры
         double simulated_temp = 20.0 + static_cast<double>(rand()) / RAND_MAX * 10.0;
         log_temperature(simulated_temp);
+
+        // Каждую минуту (считаем среднюю температуру за 1 минуту)
         std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        // Очистка старых записей, если они старше 24 минут
+        auto now = std::time(nullptr);
+        auto oldest_valid_time = now - 24 * 60; // 24 минуты назад
+
+        {
+            std::lock_guard<std::mutex> lock(db_mutex); // Синхронизация при удалении
+            std::string delete_query = "DELETE FROM temperature_logs WHERE timestamp < " + std::to_string(oldest_valid_time);
+            sqlite3* db;
+            char* err_msg = nullptr;
+            if (sqlite3_open(DB_NAME.c_str(), &db) != SQLITE_OK) {
+                std::cerr << "Ошибка открытия базы данных: " << sqlite3_errmsg(db) << std::endl;
+            }
+
+            if (sqlite3_exec(db, delete_query.c_str(), nullptr, nullptr, &err_msg) != SQLITE_OK) {
+                std::cerr << "Ошибка очистки старых данных: " << err_msg << std::endl;
+                sqlite3_free(err_msg);
+            }
+
+            sqlite3_close(db);
+        }
     }
 }
 
