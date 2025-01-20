@@ -74,15 +74,15 @@
     </header>
 
     <div class="container">
-        <!-- Секция графиков -->
+        <!-- График температуры -->
         <section>
-            <h2>График измерений за последние 24 часа</h2>
+            <h2>График измерений (за последние 24 минуты)</h2>
             <canvas id="chart"></canvas>
         </section>
 
         <!-- Таблица всех измерений -->
         <section>
-            <h2>Все измерения (за последние 24 часа)</h2>
+            <h2>Все измерения (за последние 24 минуты)</h2>
             <div class="table-wrapper">
                 <table id="all-measurements-table">
                     <thead>
@@ -96,14 +96,14 @@
             </div>
         </section>
 
-        <!-- Таблица средних значений за час -->
+        <!-- Таблица средних значений за день -->
         <section>
-            <h2>Средние температуры за час (за последний месяц)</h2>
+            <h2>Средние температуры за день (за последний месяц)</h2>
             <div class="table-wrapper">
-                <table id="hourly-averages-table">
+                <table id="daily-averages-table">
                     <thead>
                         <tr>
-                            <th>Время</th>
+                            <th>Дата</th>
                             <th>Средняя температура (°C)</th>
                         </tr>
                     </thead>
@@ -112,11 +112,11 @@
             </div>
         </section>
 
-        <!-- Таблица средних значений за день -->
+        <!-- Таблица средних значений за месяц -->
         <section>
-            <h2>Средние температуры за день (за текущий год)</h2>
+            <h2>Средние температуры за месяц (за последний год)</h2>
             <div class="table-wrapper">
-                <table id="daily-averages-table">
+                <table id="monthly-averages-table">
                     <thead>
                         <tr>
                             <th>Дата</th>
@@ -136,33 +136,32 @@
     <script>
         const API_BASE = 'http://localhost:8080';
 
-        // Форматирование времени для отображения
-        function formatTimestamp(timestamp) {
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleString();
-        }
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp * 1000);
+    return date.toLocaleString();
+}
 
-        // Обновление данных таблицы и графика
-        async function fetchData() {
-            // Получение всех измерений
-            const allMeasurementsResponse = await fetch(`${API_BASE}/temperature/all`);
-            const allMeasurements = await allMeasurementsResponse.json();
+async function fetchData() {
+    try {
+        // Все измерения
+        const allResponse = await fetch(`${API_BASE}/temperature/all`);
+        if (!allResponse.ok) throw new Error('Ошибка загрузки всех измерений');
+        const allData = await allResponse.json();
 
-            // Заполнение таблицы всех измерений
-            const allMeasurementsTable = document.getElementById('all-measurements-table').querySelector('tbody');
-            allMeasurementsTable.innerHTML = '';
-            allMeasurements.forEach(entry => {
-                const row = `<tr>
-                    <td>${formatTimestamp(entry.timestamp)}</td>
-                    <td>${entry.temperature.toFixed(2)}°C</td>
-                </tr>`;
-                allMeasurementsTable.innerHTML += row;
-            });
+        const allTable = document.getElementById('all-measurements-table').querySelector('tbody');
+        allTable.innerHTML = '';
+        allData.forEach(entry => {
+            const row = `<tr>
+                <td>${formatTimestamp(entry.timestamp)}</td>
+                <td>${entry.temperature.toFixed(2)}°C</td>
+            </tr>`;
+            allTable.innerHTML += row;
+        });
 
-            // Обновление графика
-            const labels = allMeasurements.map(entry => formatTimestamp(entry.timestamp));
-            const data = allMeasurements.map(entry => entry.temperature);
-
+        // График
+        if (allData.length > 0) {
+            const labels = allData.map(entry => formatTimestamp(entry.timestamp));
+            const data = allData.map(entry => entry.temperature);
             const chartData = {
                 labels,
                 datasets: [{
@@ -185,43 +184,37 @@
                     data: chartData,
                     options: {
                         responsive: true,
-                        plugins: {
-                            legend: { display: true },
-                        },
+                        plugins: { legend: { display: true } },
                     },
                 });
             }
-
-            // Получение средних значений за час
-            const hourlyAveragesResponse = await fetch(`${API_BASE}/temperature/hourly`);
-            const hourlyAverages = await hourlyAveragesResponse.json();
-            const hourlyAveragesTable = document.getElementById('hourly-averages-table').querySelector('tbody');
-            hourlyAveragesTable.innerHTML = '';
-            hourlyAverages.forEach(entry => {
-                const row = `<tr>
-                    <td>${formatTimestamp(entry.timestamp)}</td>
-                    <td>${entry.avg_temperature.toFixed(2)}°C</td>
-                </tr>`;
-                hourlyAveragesTable.innerHTML += row;
-            });
-
-            // Получение средних значений за день
-            const dailyAveragesResponse = await fetch(`${API_BASE}/temperature/daily`);
-            const dailyAverages = await dailyAveragesResponse.json();
-            const dailyAveragesTable = document.getElementById('daily-averages-table').querySelector('tbody');
-            dailyAveragesTable.innerHTML = '';
-            dailyAverages.forEach(entry => {
-                const row = `<tr>
-                    <td>${formatTimestamp(entry.timestamp)}</td>
-                    <td>${entry.avg_temperature.toFixed(2)}°C</td>
-                </tr>`;
-                dailyAveragesTable.innerHTML += row;
-            });
         }
 
-        // Автоматическое обновление данных каждую минуту
-        fetchData();
-        setInterval(fetchData, 60000);
+        // Дневные средние
+        const dailyResponse = await fetch(`${API_BASE}/temperature/daily`);
+        if (!dailyResponse.ok) throw new Error('Ошибка загрузки дневных данных');
+        const dailyData = await dailyResponse.json();
+
+        const dailyTable = document.getElementById('daily-averages-table').querySelector('tbody');
+        dailyTable.innerHTML = '';
+        dailyData.forEach(entry => {
+            const row = `<tr>
+                <td>${formatTimestamp(entry.timestamp)}</td>
+                <td>${entry.avg_temperature.toFixed(2)}°C</td>
+            </tr>`;
+            dailyTable.innerHTML += row;
+        });
+
+    } catch (error) {
+        console.error(error);
+        alert('Ошибка загрузки данных: ' + error.message);
+    }
+}
+
+// Первоначальная загрузка данных и периодическое обновление
+fetchData();
+setInterval(fetchData, 1000); // Обновляем каждые 10 секунд
+
     </script>
 </body>
 </html>
