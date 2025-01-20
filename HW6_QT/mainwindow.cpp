@@ -12,6 +12,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
+#include <QEvent>
+#include <QKeyEvent>
+#include <QMouseEvent>
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -38,6 +41,12 @@ MainWindow::MainWindow(QWidget *parent) :
 
     // Подключение к слоту получения данных
     connect(networkManager, &QNetworkAccessManager::finished, this, &MainWindow::onDataFetched);
+
+    this->setWindowState(Qt::WindowFullScreen);  // Режим полного экрана
+    this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);  // Без рамки
+
+    // Блокируем ввод с клавиатуры и мыши
+    installEventFilter(this);
 }
 
 MainWindow::~MainWindow()
@@ -92,4 +101,13 @@ void MainWindow::onDataFetched(QNetworkReply* reply)
 
     // Повторяем запрос через 1 секунду
     QTimer::singleShot(1000, this, &MainWindow::fetchTemperatureData);
+}
+
+// Функция для блокировки всех событий ввода (клавиатуры и мыши)
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::KeyPress || event->type() == QEvent::MouseButtonPress) {
+        return true;  // Игнорируем все нажатия клавиш и мыши
+    }
+    return QMainWindow::eventFilter(watched, event);
 }
