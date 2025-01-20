@@ -12,7 +12,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
-#include <QEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 
@@ -42,11 +41,12 @@ MainWindow::MainWindow(QWidget *parent) :
     // Подключение к слоту получения данных
     connect(networkManager, &QNetworkAccessManager::finished, this, &MainWindow::onDataFetched);
 
-    this->setWindowState(Qt::WindowFullScreen);  // Режим полного экрана
-    this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);  // Без рамки
+    // Режим полного экрана без рамок
+    this->setWindowState(Qt::WindowFullScreen);
+    this->setWindowFlags(Qt::Window | Qt::FramelessWindowHint);
 
-    // Блокируем ввод с клавиатуры и мыши
-    installEventFilter(this);
+    // Устанавливаем фильтр событий для перехвата всех событий
+    this->installEventFilter(this);
 }
 
 MainWindow::~MainWindow()
@@ -103,11 +103,19 @@ void MainWindow::onDataFetched(QNetworkReply* reply)
     QTimer::singleShot(1000, this, &MainWindow::fetchTemperatureData);
 }
 
-// Функция для блокировки всех событий ввода (клавиатуры и мыши)
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
-    if (event->type() == QEvent::KeyPress || event->type() == QEvent::MouseButtonPress) {
-        return true;  // Игнорируем все нажатия клавиш и мыши
+    if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease ||
+        event->type() == QEvent::MouseButtonPress || event->type() == QEvent::MouseButtonRelease) {
+        // Блокируем все клавиши и мыши
+        return true;
     }
+
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    // Запрещаем закрытие окна
+    event->ignore();
 }
